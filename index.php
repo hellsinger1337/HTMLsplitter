@@ -25,6 +25,7 @@ class HtmlSplitter
 
         // Получаем HTML с учетом заданной кодировки
         return $dom->saveHTML();
+
     }
 
     private static function countWordsInHTML($html1): int
@@ -66,8 +67,32 @@ class HtmlSplitter
             }
         }
 
+        if($closestIndex===null)
+            $closestIndex=self::findClosestSpace($inputString);
         return $closestIndex+1;
     }
+
+    private static function findClosestSpace($inputString): int
+    {
+        $closestIndex = 0;
+        $closestDistance = INF;
+
+        for ($i = 0; $i < strlen($inputString); $i++) {
+            $char = $inputString[$i];
+
+            if ($char === ' ') {
+                $distance = abs($i - strlen($inputString) / 2);
+
+                if ($distance < $closestDistance) {
+                    $closestDistance = $distance;
+                    $closestIndex = $i;
+                }
+            }
+        }
+
+        return $closestIndex + 1;
+    }
+
     public static function splitHtmlFileByMiddle(string &$htmlContent):string {
 
         // Находим индекс ближайшей точки к центру
@@ -75,7 +100,7 @@ class HtmlSplitter
 
         // Разделяем содержимое на две части
         $part1 = substr($htmlContent, 0, $middleIndex);
-        $part2 = substr($htmlContent, $middleIndex);
+        $part2 = substr($htmlContent, $middleIndex+1);
 
         $dom2 = new DOMDocument();
         $dom2->loadHTML(mb_convert_encoding($part2, 'HTML-ENTITIES', 'UTF-8'));
@@ -85,7 +110,6 @@ class HtmlSplitter
         $dom1->encoding = 'UTF-8';
         $htmlContent = $dom1->saveHTML();
         return $dom2->saveHTML();
-
     }
 
     private static function optimizeHtmlArrayByLength($htmlArray, $wordsCount): array
@@ -130,7 +154,14 @@ class HtmlSplitter
         // Перебираем массив HTML-строк
         foreach ($htmlArray as $index => $htmlContent) {
             $fileName = $folderPath . '/file' . $index . '.html'; // Генерируем уникальное имя файла
+            $dom = new DOMDocument();
+            $dom->loadHTML(mb_convert_encoding($htmlContent, 'HTML-ENTITIES', 'UTF-8'));
 
+            // Устанавливаем кодировку для сохранения HTML
+            $dom->encoding = 'UTF-8';
+
+            // Получаем HTML с учетом заданной кодировки
+            $htmlContent = $dom->saveHTML();
             // Записываем HTML-строку в файл
             file_put_contents($fileName, $htmlContent);
         }
@@ -147,7 +178,6 @@ class HtmlSplitter
     {
         libxml_use_internal_errors(true);
         $htmlContent = file_get_contents($inputFile);
-
         $htmlArray = self::splitHtmlContent($htmlContent);
 
         $htmlArray = self::optimizeHtmlArrayByLength($htmlArray, $wordsCount);
@@ -174,11 +204,11 @@ class HtmlSplitter
 }
 
 // Пример использования
-ini_set('memory_limit', '4560M');
+ini_set('memory_limit', '45600M');
 $inputFile = 'content.html';
 $outputFolder = 'splitedHtml';
 if (!file_exists($outputFolder)) {
     mkdir($outputFolder, 0777, true);
 }
-$wordsCount = 100;
+$wordsCount = 50;
 HtmlSplitter::splitHtmlByWordsCountToFolder($inputFile, $outputFolder, $wordsCount);
