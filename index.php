@@ -17,8 +17,14 @@ class HtmlSplitter
             // Если </body> не найден, просто объединяем оба HTML
             $combined_html = $html1 . $html2;
         }
+        $dom = new DOMDocument();
+        $dom->loadHTML(mb_convert_encoding($combined_html, 'HTML-ENTITIES', 'UTF-8'));
 
-        return $combined_html;
+        // Устанавливаем кодировку для сохранения HTML
+        $dom->encoding = 'UTF-8';
+
+        // Получаем HTML с учетом заданной кодировки
+        return $dom->saveHTML();
     }
 
     private static function countWordsInHTML($html1): int
