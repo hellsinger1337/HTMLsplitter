@@ -45,20 +45,74 @@ class HtmlSplitter
         return count($filteredWords);
     }
 
+
+    private static function findClosestPunctuation($inputString):int
+    {
+        $punctuationMarks = ['.', '!', '?'];
+
+        $closestIndex = null;
+        $closestDistance = INF;
+
+        for ($i = 0; $i < strlen($inputString); $i++) {
+            $char = $inputString[$i];
+
+            if (in_array($char, $punctuationMarks)) {
+                $distance = abs($i - strlen($inputString) / 2);
+
+                if ($distance < $closestDistance) {
+                    $closestDistance = $distance;
+                    $closestIndex = $i;
+                }
+            }
+        }
+
+        return $closestIndex+1;
+    }
+    public static function splitHtmlFileByMiddle(string &$htmlContent):string {
+
+        // Находим индекс ближайшей точки к центру
+        $middleIndex = self::findClosestPunctuation($htmlContent);
+
+        // Разделяем содержимое на две части
+        $part1 = substr($htmlContent, 0, $middleIndex);
+        $part2 = substr($htmlContent, $middleIndex);
+
+        $dom2 = new DOMDocument();
+        $dom2->loadHTML(mb_convert_encoding($part2, 'HTML-ENTITIES', 'UTF-8'));
+        $dom2->encoding = 'UTF-8';
+        $dom1 = new DOMDocument();
+        $dom1->loadHTML(mb_convert_encoding($part1, 'HTML-ENTITIES', 'UTF-8'));
+        $dom1->encoding = 'UTF-8';
+        $htmlContent = $dom1->saveHTML();
+        return $dom2->saveHTML();
+
+    }
+
     private static function optimizeHtmlArrayByLength($htmlArray, $wordsCount): array
     {
         $result = [];
         $Length = count($htmlArray);
-        while ($Length > 2) {
+        while ($Length > 1) {
+            $Length = count($htmlArray);
+            if(self::countWordsInHTML($htmlArray[$Length - 1]) >1.75*$wordsCount){
+                $htmlDoc = $htmlArray[$Length - 1];
+                $Length = count($htmlArray);
+                $htmlArray [$Length] =self::splitHtmlFileByMiddle($htmlDoc );
+                $htmlArray[$Length - 1] = $htmlDoc;
+            }else{
             $Length = count($htmlArray);
             $wordsCountIn2LastHtml = self::countWordsInHTML($htmlArray[$Length - 1]) + self::countWordsInHTML($htmlArray[$Length - 2]);
-
             if ($wordsCountIn2LastHtml <= $wordsCount) {
+                $Length = count($htmlArray);
                 $htmlArray[$Length - 2] = self::mergeHtmlStringsWithoutBr($htmlArray[$Length - 2], $htmlArray[$Length - 1]);
             } else {
+                $Length = count($htmlArray);
                 $result[] = $htmlArray[$Length - 1];
             }
+            $Length = count($htmlArray);
             unset($htmlArray[$Length - 1]);
+            }
+            $Length = count($htmlArray);
         }
         if (count($htmlArray) === 1) {
             $result[] = $htmlArray[0];
@@ -91,16 +145,14 @@ class HtmlSplitter
      */
     public static function splitHtmlByWordsCountToFolder(string $inputFile, string $folderPath, int $wordsCount): void
     {
+        libxml_use_internal_errors(true);
         $htmlContent = file_get_contents($inputFile);
 
-        $outputFolder = 'out1';
-        if (!file_exists($outputFolder)) {
-            mkdir($outputFolder, 0777, true);
-        }
         $htmlArray = self::splitHtmlContent($htmlContent);
 
         $htmlArray = self::optimizeHtmlArrayByLength($htmlArray, $wordsCount);
         self::saveHtmlFiles($htmlArray, $folderPath);
+        libxml_use_internal_errors(false);
     }
 
     /**
@@ -115,10 +167,6 @@ class HtmlSplitter
     {
         $htmlContent = file_get_contents($inputFile);
 
-        $outputFolder = 'out1';
-        if (!file_exists($outputFolder)) {
-            mkdir($outputFolder, 0777, true);
-        }
         $htmlArray = self::splitHtmlContent($htmlContent);
 
         return self::optimizeHtmlArrayByLength($htmlArray, $wordsCount);
@@ -132,5 +180,5 @@ $outputFolder = 'splitedHtml';
 if (!file_exists($outputFolder)) {
     mkdir($outputFolder, 0777, true);
 }
-$wordsCount = 1000;
+$wordsCount = 100;
 HtmlSplitter::splitHtmlByWordsCountToFolder($inputFile, $outputFolder, $wordsCount);
