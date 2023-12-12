@@ -45,8 +45,7 @@ class HtmlSplitter
 
         return count($filteredWords);
     }
-
-
+    
     private static function findClosestPunctuation($inputString):int
     {
         $punctuationMarks = ['.', '!', '?'];
@@ -150,7 +149,6 @@ class HtmlSplitter
         if (!file_exists($folderPath)) {
             mkdir($folderPath, 0777, true); // Создаем папку, если она не существует
         }
-
         // Перебираем массив HTML-строк
         foreach ($htmlArray as $index => $htmlContent) {
             $fileName = $folderPath . '/file' . $index . '.html'; // Генерируем уникальное имя файла
