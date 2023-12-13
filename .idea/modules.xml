@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/HTMLsplitter.iml" filepath="$PROJECT_DIR$/.idea/HTMLsplitter.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/HTMLSplitterRE.iml" filepath="$PROJECT_DIR$/.idea/HTMLSplitterRE.iml" />
     </modules>
   </component>
 </project>

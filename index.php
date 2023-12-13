@@ -1,37 +1,30 @@
 <?php
-class HtmlSplitter
+class HTMLSplitter
 {
-    private static function splitHtmlContent($htmlContent): array
-    {
-        return explode('<br>', $htmlContent);
+    /**
+     * Разделяет HTML-контент на строки по тегам.
+     *
+     * @param string $htmlString - HTML-контент.
+     * @return array - Массив строк, каждая содержит информацию о теге (если есть) и тексте строки.
+     */
+    private static function splitByTags(string $htmlString):array {
+        // Используем регулярное выражение для разделения по HTML-тегам
+        preg_match_all('/(<[^>]+>)([^<]*)|([^<]+)/', $htmlString, $matches, PREG_SET_ORDER);
+
+        // Возвращаем результат
+        return $matches;
     }
-
-    private static function mergeHtmlStringsWithoutBr($html1, $html2): string
+    /**
+     * Подсчитывает количество слов в HTML-контенте.
+     *
+     * @param string $html1 - HTML-контент.
+     * @return int - Количество слов в HTML-контенте.
+     */
+    private static function CountWordsInHTML(string $html1): int
     {
-        // Ищем позицию закрывающего тега </body> в первом HTML
-        $index_body1 = strpos($html1, '</body>');
-        if ($index_body1 !== false) {
-            // Если нашли, вставляем второй HTML перед </body> первого HTML
-            $combined_html = substr_replace($html1, $html2, $index_body1, 0);
-        } else {
-            // Если </body> не найден, просто объединяем оба HTML
-            $combined_html = $html1 . $html2;
-        }
-        $dom = new DOMDocument();
-        $dom->loadHTML(mb_convert_encoding($combined_html, 'HTML-ENTITIES', 'UTF-8'));
-
-        // Устанавливаем кодировку для сохранения HTML
-        $dom->encoding = 'UTF-8';
-
-        // Получаем HTML с учетом заданной кодировки
-        return $dom->saveHTML();
-
-    }
-
-    private static function countWordsInHTML($html1): int
-    {
-        // Преобразование HTML-сущностей, чтобы они не мешали подсчету слов
+        // Преобразование HTML-сущностей для корректного подсчета слов
         $html = html_entity_decode($html1, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
         // Удаление HTML-тегов
         $text = strip_tags($html, 0);
 
@@ -45,168 +38,207 @@ class HtmlSplitter
 
         return count($filteredWords);
     }
-    
-    private static function findClosestPunctuation($inputString):int
+    private static function getFirstWords(&$inputString, $count): string {
+        // Используем preg_match_all для поиска всех слов в строке, включая несколько пробелов между ними
+        preg_match_all('/\S+\s*/', $inputString, $matches);
+
+        // Получаем массив слов
+        $words = $matches[0];
+
+        // Переменная для хранения результата
+        $result = '';
+
+        // Переменная для отслеживания количества слов
+        $wordCount = 0;
+
+        // Проходим по каждому слову
+        foreach ($words as $word) {
+            // Добавляем слово к результату
+            $result .= $word;
+
+            // Проверяем, содержится ли в слове знак препинания
+            $punctuation = strpbrk($word, '.!?');
+
+            // Если знак препинания найден, прекращаем добавление слов
+            if ($punctuation !== false) {
+                break;
+            }
+
+            // Увеличиваем счетчик слов
+            $wordCount++;
+
+            // Если достигнуто необходимое количество слов, прекращаем добавление слов
+            if ($wordCount == $count) {
+                break;
+            }
+        }
+
+        // Обновляем входную строку, удаляя использованные слова
+        $inputString = substr($inputString, strlen($result));
+
+        // Возвращаем результат
+        return $result;
+    }
+
+
+
+    /**
+     * Обрезает HTML-контент внутри тегов и по заданной длине.
+     *
+     * @param int $minPageLength - Минимальная длина страницы.
+     * @param int $maxPageLength - Максимальная длина страницы.
+     * @param array $lines - Массив строк HTML-контента.
+     * @param bool $split - Флаг, указывающий на разделение на подстраницы.
+     * @return array|string - Обрезанный HTML-контент или массив подстраниц.
+     */
+    private static function TrimHTMLContentWithinTagsAndLength(array &$open_tags,int $minPageLength,int $maxPageLength,array &$lines,bool $split = false): array|string
     {
-        $punctuationMarks = ['.', '!', '?'];
-
-        $closestIndex = null;
-        $closestDistance = INF;
-
-        for ($i = 0; $i < strlen($inputString); $i++) {
-            $char = $inputString[$i];
-
-            if (in_array($char, $punctuationMarks)) {
-                $distance = abs($i - strlen($inputString) / 2);
-
-                if ($distance < $closestDistance) {
-                    $closestDistance = $distance;
-                    $closestIndex = $i;
+        $truncate = '';               // Итоговый обрезанный HTML-контент
+        foreach ($open_tags as $open_tag) {
+            $truncate = $open_tag . $truncate;
+        }
+        $total_length = 0;// Общая длина контента
+        $indexCounter=0;
+        // Проход по строкам HTML-контента
+        foreach ($lines as $index =>$this_elem) {
+            // Проверка наличия открывающего или закрывающего тега в текущей строке
+            if (!empty($lines[$index][1])) {
+                // Проверка, не является ли тег самозакрывающимся или пустым
+                if (!preg_match('/^<(\s*.+?\/\s*|\s*(img|br|input|hr|area|base|basefont|col|frame|isindex|link|meta|param)(\s.+?)?)>$/is', $lines[$index][1])) {
+                    // Проверка наличия закрывающего тега
+                    if (substr($lines[$index][1],1,1)==='/') {
+                        array_shift($open_tags);
+                    } else{
+                        // Открывающий тег
+                        array_unshift($open_tags, $lines[$index][1]);
+                    }
                 }
             }
-        }
+            $content_length = self::CountWordsInHTML($lines[$index][2]);
+            // Проверка, не превышена ли минимальная длина страницы
+            if ($total_length + $content_length > $minPageLength) {
+                if ($total_length + $content_length > $maxPageLength) {
+                    $truncate .= $lines[$index][1] . self::getFirstWords($lines[$index][2], $maxPageLength - $total_length);
 
-        if($closestIndex===null)
-            $closestIndex=self::findClosestSpace($inputString);
-        return $closestIndex+1;
-    }
-
-    private static function findClosestSpace($inputString): int
-    {
-        $closestIndex = 0;
-        $closestDistance = INF;
-
-        for ($i = 0; $i < strlen($inputString); $i++) {
-            $char = $inputString[$i];
-
-            if ($char === ' ') {
-                $distance = abs($i - strlen($inputString) / 2);
-
-                if ($distance < $closestDistance) {
-                    $closestDistance = $distance;
-                    $closestIndex = $i;
+                    foreach ($open_tags as $open_tag) {
+                        $truncate .= "</" . substr($open_tag,1,strlen($open_tag)-2) . ">";
+                    }
+                    $last_index = $indexCounter;
+                    array_shift($open_tags);
+                    // Возвращение результата в зависимости от флага split
+                    if (true === $split) {
+                        return array(
+                            'truncate' => $truncate,
+                            'last_index' => $last_index,
+                        );
+                    }
+                    return $truncate;
+                } else {
+                    $truncate .= $lines[$index][1] . $lines[$index][2];
+                    foreach ($open_tags as $open_tag) {
+                        $truncate .= "</" . substr($open_tag, 1, strlen($open_tag)-2) . ">";
+                    }
+                    $last_index = $indexCounter+1;
+                    // Возвращение результата в зависимости от флага split
+                    if (true === $split) {
+                        return array(
+                            'truncate' => $truncate,
+                            'last_index' => $last_index,
+                        );
+                    }
                 }
             }
+            $indexCounter++;
+            $total_length+=$content_length;
+            $truncate .= $lines[$index][1] . $lines[$index][2];
         }
 
-        return $closestIndex + 1;
-    }
-
-    public static function splitHtmlFileByMiddle(string &$htmlContent):string {
-
-        // Находим индекс ближайшей точки к центру
-        $middleIndex = self::findClosestPunctuation($htmlContent);
-
-        // Разделяем содержимое на две части
-        $part1 = substr($htmlContent, 0, $middleIndex);
-        $part2 = substr($htmlContent, $middleIndex+1);
-
-        $dom2 = new DOMDocument();
-        $dom2->loadHTML(mb_convert_encoding($part2, 'HTML-ENTITIES', 'UTF-8'));
-        $dom2->encoding = 'UTF-8';
-        $dom1 = new DOMDocument();
-        $dom1->loadHTML(mb_convert_encoding($part1, 'HTML-ENTITIES', 'UTF-8'));
-        $dom1->encoding = 'UTF-8';
-        $htmlContent = $dom1->saveHTML();
-        return $dom2->saveHTML();
-    }
-
-    private static function optimizeHtmlArrayByLength($htmlArray, $wordsCount): array
-    {
-        $result = [];
-        $Length = count($htmlArray);
-        while ($Length > 1) {
-            $Length = count($htmlArray);
-            if(self::countWordsInHTML($htmlArray[$Length - 1]) >1.75*$wordsCount){
-                $htmlDoc = $htmlArray[$Length - 1];
-                $Length = count($htmlArray);
-                $htmlArray [$Length] =self::splitHtmlFileByMiddle($htmlDoc );
-                $htmlArray[$Length - 1] = $htmlDoc;
-            }else{
-            $Length = count($htmlArray);
-            $wordsCountIn2LastHtml = self::countWordsInHTML($htmlArray[$Length - 1]) + self::countWordsInHTML($htmlArray[$Length - 2]);
-            if ($wordsCountIn2LastHtml <= $wordsCount) {
-                $Length = count($htmlArray);
-                $htmlArray[$Length - 2] = self::mergeHtmlStringsWithoutBr($htmlArray[$Length - 2], $htmlArray[$Length - 1]);
-            } else {
-                $Length = count($htmlArray);
-                $result[] = $htmlArray[$Length - 1];
-            }
-            $Length = count($htmlArray);
-            unset($htmlArray[$Length - 1]);
-            }
-            $Length = count($htmlArray);
+        // Возвращение результата в зависимости от флага split
+        if (true === $split) {
+            return array(
+                'truncate'   => $truncate,
+                'last_index' => count($lines),
+            );
         }
-        if (count($htmlArray) === 1) {
-            $result[] = $htmlArray[0];
-        }
-        return array_reverse($result);
-    }
 
-    private static function saveHtmlFiles($htmlArray, $folderPath): void
-    {
-        // Проверяем, существует ли указанная папка
-        if (!file_exists($folderPath)) {
-            mkdir($folderPath, 0777, true); // Создаем папку, если она не существует
-        }
-        // Перебираем массив HTML-строк
-        foreach ($htmlArray as $index => $htmlContent) {
-            $fileName = $folderPath . '/file' . $index . '.html'; // Генерируем уникальное имя файла
-            $dom = new DOMDocument();
-            $dom->loadHTML(mb_convert_encoding($htmlContent, 'HTML-ENTITIES', 'UTF-8'));
-
-            // Устанавливаем кодировку для сохранения HTML
-            $dom->encoding = 'UTF-8';
-
-            // Получаем HTML с учетом заданной кодировки
-            $htmlContent = $dom->saveHTML();
-            // Записываем HTML-строку в файл
-            file_put_contents($fileName, $htmlContent);
-        }
+        return $truncate;
     }
 
     /**
-     * Divides HTML content into pages with no more than the specified number of words and save to a folder.
+     * Обрезает HTML-контент до заданной длины, сохраняя структуру тегов.
      *
-     * @param string $inputFile   The path to the input HTML file.
-     * @param string $folderPath  The path to the output folder.
-     * @param int    $wordsCount   The maximum number of words per page.
+     * @param string $htmlContent - Исходный HTML-контент.
+     * @param int $minPageLength - Минимальная длина страницы.
+     * @param int $maxPageLength - Максимальная допустимая длина страницы.
+     * @return string - Обрезанный HTML-контент.
      */
-    public static function splitHtmlByWordsCountToFolder(string $inputFile, string $folderPath, int $wordsCount): void
+    public static function getTrimedHTMLContentWithinTagsAndLength(string $htmlContent,int $minPageLength,int $maxPageLength):string
     {
-        libxml_use_internal_errors(true);
-        $htmlContent = file_get_contents($inputFile);
-        $htmlArray = self::splitHtmlContent($htmlContent);
-
-        $htmlArray = self::optimizeHtmlArrayByLength($htmlArray, $wordsCount);
-        self::saveHtmlFiles($htmlArray, $folderPath);
-        libxml_use_internal_errors(false);
+        if (strlen(preg_replace('/<.*?>/', '', $htmlContent)) <= $maxPageLength) {
+            return $htmlContent;
+        }
+        $lines = self::SplitByTags($htmlContent);
+        $open_tags=[];
+        return self::TrimHTMLContentWithinTagsAndLength($open_tags,$minPageLength,$maxPageLength,$lines);
     }
-
     /**
-     * Divides HTML content into pages with no more than the specified number of words and returns an array
+     * Разбивает HTML-контент на массив страниц заданной длины.
      *
-     * @param string $inputFile   The path to the input HTML file.
-     * @param int    $wordsCount   The maximum number of words per page.
-     *
-     * @return array The array of HTML strings.
+     * @param string $htmlContent - Исходный HTML-контент.
+     * @param int $minPageLength - Минимальная длина страницы.
+     * @param int $maxPageLength - Максимальная допустимая длина страницы.
+     * @return array - Массив обрезанных HTML-страниц.
      */
-    public static function splitHtmlByWordsCountToArray(string $inputFile, int $wordsCount): array
-    {
-        $htmlContent = file_get_contents($inputFile);
+    public static function SplitHtmlToArray(string $htmlContent, int $minPageLength, int $maxPageLength): array {
+        $splitted = [];
+        if (strlen(preg_replace('/<.*?>/', '', $htmlContent)) <= $maxPageLength) {
+            return array($htmlContent);
+        }
 
-        $htmlArray = self::splitHtmlContent($htmlContent);
+        $lines = self::SplitByTags($htmlContent);
+        $open_tags = [];
+        while (count($lines)>0) {
 
-        return self::optimizeHtmlArrayByLength($htmlArray, $wordsCount);
+            $cropped = self::TrimHTMLContentWithinTagsAndLength($open_tags ,$minPageLength,$maxPageLength,$lines,true);
+            $splitted[] = $cropped['truncate'];
+            $last_index = $cropped['last_index'];
+            $lines = array_slice($lines,$last_index);
+        }
+
+        return $splitted;
+    }
+    /**
+     * Разбивает HTML-контент на страницы заданной длины и сохраняет их в файлы в указанной папке.
+     *
+     * @param string $htmlContent - Исходный HTML-контент.
+     * @param int $minPageLength - Желаемая длина страницы.
+     * @param int $maxPageLength - Максимальная допустимая длина страницы.
+     * @param string $outputFolder - Папка для сохранения файлов.
+     * @return void
+     */
+    public static function SplitHtmlToFolder(string $htmlContent,int $minPageLength,int $maxPageLength,string $outputFolder):void{
+        if (!file_exists($outputFolder) && !is_dir($outputFolder)) {
+            mkdir($outputFolder);
+        }
+
+        $splitted = self::SplitHtmlToArray($htmlContent,$minPageLength,$maxPageLength);
+        foreach ($splitted as $index => $htmlContent) {
+            // Создаем имя файла на основе индекса
+            $fileName = "page_" . ($index + 1) . ".html";
+
+            // Создаем полный путь к файлу
+            $filePath = $outputFolder . '/' . $fileName;
+
+            // Сохраняем HTML в файл
+            file_put_contents($filePath, $htmlContent);
+        }
     }
 }
-
-// Пример использования
-ini_set('memory_limit', '45600M');
+ini_set('memory_limit', '25600M');
 $inputFile = 'content.html';
-$outputFolder = 'splitedHtml';
-if (!file_exists($outputFolder)) {
-    mkdir($outputFolder, 0777, true);
-}
-$wordsCount = 50;
-HtmlSplitter::splitHtmlByWordsCountToFolder($inputFile, $outputFolder, $wordsCount);
+$outputFolder = 'ContestSplited';
+$htmlContent = file_get_contents($inputFile);
+$goodPageLength = 500;
+$maxPageLength = $goodPageLength *1.2;
+HTMLSplitter::SplitHtmlToFolder($htmlContent,$goodPageLength,$maxPageLength,$outputFolder);
+
