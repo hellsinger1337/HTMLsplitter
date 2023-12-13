@@ -121,7 +121,8 @@ class HTMLSplitter
                     $truncate .= $lines[$index][1] . self::getFirstWords($lines[$index][2], $maxPageLength - $total_length);
 
                     foreach ($open_tags as $open_tag) {
-                        $truncate .= "</" . substr($open_tag,1,strlen($open_tag)-2) . ">";
+                        $tagWOattr = preg_replace("#(</?\w+)(?:\s(?:[^<>/]|/[^<>])*)?(/?>)#ui", '$1$2',$open_tag);
+                        $truncate .= "</" . substr($tagWOattr,1,strlen($tagWOattr)-2) . ">";
                     }
                     $last_index = $indexCounter;
                     array_shift($open_tags);
@@ -136,7 +137,8 @@ class HTMLSplitter
                 } else {
                     $truncate .= $lines[$index][1] . $lines[$index][2];
                     foreach ($open_tags as $open_tag) {
-                        $truncate .= "</" . substr($open_tag, 1, strlen($open_tag)-2) . ">";
+                        $tagWOattr = preg_replace("#(</?\w+)(?:\s(?:[^<>/]|/[^<>])*)?(/?>)#ui", '$1$2',$open_tag);
+                        $truncate .= "</" . substr($tagWOattr,1,strlen($tagWOattr)-2) . ">";
                     }
                     $last_index = $indexCounter+1;
                     // Возвращение результата в зависимости от флага split
