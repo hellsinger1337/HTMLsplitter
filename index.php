@@ -1,26 +1,92 @@
 <?php
-class HTMLSplitter
+class HtmlSplitter
 {
+
+    //region splitByTags
     /**
      * Разделяет HTML-контент на строки по тегам.
      *
      * @param string $htmlString - HTML-контент.
-     * @return array - Массив строк, каждая содержит информацию о теге (если есть) и тексте строки.
+     * @return array - Массив массивов, каждый из которых содержит информацию о теге и(если есть) тексте строки.
      */
-    private static function splitByTags(string $htmlString):array {
+    public static function splitByTags(string $htmlString):array {
+        $htmlString = self::replaceSpecialCharsInAttributes($htmlString);
         // Используем регулярное выражение для разделения по HTML-тегам
         preg_match_all('/(<[^>]+>)([^<]*)|([^<]+)/', $htmlString, $matches, PREG_SET_ORDER);
 
         // Возвращаем результат
         return $matches;
     }
+    private static function replaceSpecialCharsInAttributes($html) {
+        // Создаем новый объект DOMDocument
+        $dom = new DOMDocument('1.0', 'UTF-8');
+
+        libxml_use_internal_errors(true);
+
+        $html = mb_convert_encoding($html , 'HTML-ENTITIES', 'UTF-8');
+        // Загружаем HTML-код в DOMDocument с использованием флагов LIBXML_HTML_NOIMPLIED и LIBXML_HTML_NODEFDTD
+        $dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+
+        libxml_use_internal_errors(false);
+
+        // Создаем объект DOMXPath
+        $xpath = new DOMXPath($dom);
+
+        // Используем XPath для выбора всех атрибутов с текстовыми значениями
+        $attributes = $xpath->query('//*[@*[contains(.,"<") or contains(.,">")]]');
+
+        // Обходим все атрибуты и заменяем символы < и > в значениях
+        foreach ($attributes as $attribute) {
+            $attribute->value = str_replace(['<', '>'], ['&lt;', '&gt;'], $attribute->value);
+        }
+        // Получаем отредактированный HTML-код
+        $editedHtml = $dom->saveHTML();
+
+        // Устанавливаем кодировку UTF-8 перед сохранением
+        $editedHtml = mb_convert_encoding($editedHtml, 'UTF-8', 'HTML-ENTITIES');
+
+        return $editedHtml;
+    }
+
+    private static function restoreSpecialCharsInAttributes($html) {
+        $dom = new DOMDocument('1.0', 'UTF-8');
+
+        // Временно отключаем вывод ошибок
+        libxml_use_internal_errors(true);
+
+        $html = mb_convert_encoding($html , 'HTML-ENTITIES', 'UTF-8');
+        // Загружаем HTML-код в DOMDocument с использованием флагов LIBXML_HTML_NOIMPLIED и LIBXML_HTML_NODEFDTD
+        $dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+
+        libxml_use_internal_errors(false);
+        // Создаем объект DOMXPath
+        $xpath = new DOMXPath($dom);
+
+        // Используем XPath для выбора всех атрибутов с текстовыми значениями
+        $attributes = $xpath->query('//*[@*[contains(.,"&lt;") or contains(.,"&gt;")]]');
+
+        // Обходим все атрибуты и восстанавливаем символы < и > в значениях
+        foreach ($attributes as $attribute) {
+            $attribute->value = str_replace(['&lt;', '&gt;'], ['<', '>'], $attribute->value);
+        }
+
+        // Получаем отредактированный HTML-код
+        $editedHtml = $dom->saveHTML();
+
+        // Устанавливаем кодировку UTF-8 перед сохранением
+        $editedHtml = mb_convert_encoding($editedHtml, 'UTF-8', 'HTML-ENTITIES');
+
+        return $editedHtml;
+    }
+    //endregion
+
     /**
      * Подсчитывает количество слов в HTML-контенте.
      *
      * @param string $html1 - HTML-контент.
      * @return int - Количество слов в HTML-контенте.
      */
-    private static function CountWordsInHTML(string $html1): int
+    private static function countWordsInHtml(string $html1): int
     {
         // Преобразование HTML-сущностей для корректного подсчета слов
         $html = html_entity_decode($html1, ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -91,7 +157,7 @@ class HTMLSplitter
      * @param bool $split - Флаг, указывающий на разделение на подстраницы.
      * @return array|string - Обрезанный HTML-контент или массив подстраниц.
      */
-    private static function TrimHTMLContentWithinTagsAndLength(array &$open_tags,int $minPageLength,int $maxPageLength,array &$lines,bool $split = false): array|string
+    private static function trimHtmlContentWithinTagsAndLength(array &$open_tags,int $minPageLength,int $maxPageLength,array &$lines,bool $split = false): array|string
     {
         $truncate = '';               // Итоговый обрезанный HTML-контент
         foreach ($open_tags as $open_tag) {
@@ -114,7 +180,7 @@ class HTMLSplitter
                     }
                 }
             }
-            $content_length = self::CountWordsInHTML($lines[$index][2]);
+            $content_length = self::countWordsInHtml($lines[$index][2]);
             // Проверка, не превышена ли минимальная длина страницы
             if ($total_length + $content_length > $minPageLength) {
                 if ($total_length + $content_length > $maxPageLength) {
@@ -174,14 +240,14 @@ class HTMLSplitter
      * @param int $maxPageLength - Максимальная допустимая длина страницы.
      * @return string - Обрезанный HTML-контент.
      */
-    public static function getTrimedHTMLContentWithinTagsAndLength(string $htmlContent,int $minPageLength,int $maxPageLength):string
+    public static function getTrimmedHtmlContentWithinTagsAndLength(string $htmlContent,int $minPageLength,int $maxPageLength):string
     {
         if (strlen(preg_replace('/<.*?>/', '', $htmlContent)) <= $maxPageLength) {
             return $htmlContent;
         }
         $lines = self::SplitByTags($htmlContent);
         $open_tags=[];
-        return self::TrimHTMLContentWithinTagsAndLength($open_tags,$minPageLength,$maxPageLength,$lines);
+        return self::trimHtmlContentWithinTagsAndLength($open_tags,$minPageLength,$maxPageLength,$lines);
     }
     /**
      * Разбивает HTML-контент на массив страниц заданной длины.
@@ -191,8 +257,9 @@ class HTMLSplitter
      * @param int $maxPageLength - Максимальная допустимая длина страницы.
      * @return array - Массив обрезанных HTML-страниц.
      */
-    public static function SplitHtmlToArray(string $htmlContent, int $minPageLength, int $maxPageLength): array {
+    public static function splitHtmlToArray(string $htmlContent, int $minPageLength, int $maxPageLength): array {
         $splitted = [];
+
         if (strlen(preg_replace('/<.*?>/', '', $htmlContent)) <= $maxPageLength) {
             return array($htmlContent);
         }
@@ -201,7 +268,7 @@ class HTMLSplitter
         $open_tags = [];
         while (count($lines)>0) {
 
-            $cropped = self::TrimHTMLContentWithinTagsAndLength($open_tags ,$minPageLength,$maxPageLength,$lines,true);
+            $cropped = self::trimHtmlContentWithinTagsAndLength($open_tags ,$minPageLength,$maxPageLength,$lines,true);
             $splitted[] = $cropped['truncate'];
             $last_index = $cropped['last_index'];
             $lines = array_slice($lines,$last_index);
@@ -218,29 +285,31 @@ class HTMLSplitter
      * @param string $outputFolder - Папка для сохранения файлов.
      * @return void
      */
-    public static function SplitHtmlToFolder(string $htmlContent,int $minPageLength,int $maxPageLength,string $outputFolder):void{
+    public static function splitHtmlToFolder(string $htmlContent,int $minPageLength,int $maxPageLength,string $outputFolder):void{
         if (!file_exists($outputFolder) && !is_dir($outputFolder)) {
             mkdir($outputFolder);
         }
 
-        $splitted = self::SplitHtmlToArray($htmlContent,$minPageLength,$maxPageLength);
+        $splitted = self::splitHtmlToArray($htmlContent,$minPageLength,$maxPageLength);
         foreach ($splitted as $index => $htmlContent) {
             // Создаем имя файла на основе индекса
             $fileName = "page_" . ($index + 1) . ".html";
 
             // Создаем полный путь к файлу
             $filePath = $outputFolder . '/' . $fileName;
-
+            $htmlContent = self::restoreSpecialCharsInAttributes($htmlContent);
             // Сохраняем HTML в файл
             file_put_contents($filePath, $htmlContent);
         }
     }
 }
-ini_set('memory_limit', '25600M');
+
+// Пример использования
+ini_set('memory_limit', '2560M');
 $inputFile = 'content.html';
 $outputFolder = 'ContestSplited';
 $htmlContent = file_get_contents($inputFile);
 $goodPageLength = 500;
 $maxPageLength = $goodPageLength *1.2;
-HTMLSplitter::SplitHtmlToFolder($htmlContent,$goodPageLength,$maxPageLength,$outputFolder);
+HtmlSplitter::splitHtmlToFolder($htmlContent,$goodPageLength,$maxPageLength,$outputFolder);
 
