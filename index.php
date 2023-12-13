@@ -17,7 +17,7 @@ class HtmlSplitter
         // Возвращаем результат
         return $matches;
     }
-    private static function replaceSpecialCharsInAttributes($html) {
+    public static function replaceSpecialCharsInAttributes($html) {
         // Создаем новый объект DOMDocument
         $dom = new DOMDocument('1.0', 'UTF-8');
 
@@ -33,11 +33,10 @@ class HtmlSplitter
         $xpath = new DOMXPath($dom);
 
         // Используем XPath для выбора всех атрибутов с текстовыми значениями
-        $attributes = $xpath->query('//*[@*[contains(.,"<") or contains(.,">")]]');
-
+        $attributes = $xpath->query('//@*');
         // Обходим все атрибуты и заменяем символы < и > в значениях
         foreach ($attributes as $attribute) {
-            $attribute->value = str_replace(['<', '>'], ['&lt;', '&gt;'], $attribute->value);
+            $attribute->value = str_replace(['<', '>'], ['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], $attribute->value);
         }
         // Получаем отредактированный HTML-код
         $editedHtml = $dom->saveHTML();
@@ -63,19 +62,19 @@ class HtmlSplitter
         $xpath = new DOMXPath($dom);
 
         // Используем XPath для выбора всех атрибутов с текстовыми значениями
-        $attributes = $xpath->query('//*[@*[contains(.,"&lt;") or contains(.,"&gt;")]]');
+        $attributes = $xpath->query('//@*');
 
         // Обходим все атрибуты и восстанавливаем символы < и > в значениях
         foreach ($attributes as $attribute) {
-            $attribute->value = str_replace(['&lt;', '&gt;'], ['<', '>'], $attribute->value);
+
+            $attribute->value = str_replace(['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], ['<', '>'], $attribute->value);
         }
 
         // Получаем отредактированный HTML-код
         $editedHtml = $dom->saveHTML();
 
         // Устанавливаем кодировку UTF-8 перед сохранением
-        $editedHtml = mb_convert_encoding($editedHtml, 'UTF-8', 'HTML-ENTITIES');
-
+        $editedHtml =mb_convert_encoding($editedHtml , 'UTF-8', 'HTML-ENTITIES');
         return $editedHtml;
     }
     //endregion
@@ -174,7 +173,7 @@ class HtmlSplitter
                     // Проверка наличия закрывающего тега
                     if (substr($lines[$index][1],1,1)==='/') {
                         array_shift($open_tags);
-                    } else{
+                    } elseif (substr($lines[$index][1],1,1)!='!'){
                         // Открывающий тег
                         array_unshift($open_tags, $lines[$index][1]);
                     }
@@ -269,7 +268,7 @@ class HtmlSplitter
         while (count($lines)>0) {
 
             $cropped = self::trimHtmlContentWithinTagsAndLength($open_tags ,$minPageLength,$maxPageLength,$lines,true);
-            $splitted[] = $cropped['truncate'];
+            $splitted[] = self::restoreSpecialCharsInAttributes($cropped['truncate']);
             $last_index = $cropped['last_index'];
             $lines = array_slice($lines,$last_index);
         }
@@ -297,7 +296,6 @@ class HtmlSplitter
 
             // Создаем полный путь к файлу
             $filePath = $outputFolder . '/' . $fileName;
-            $htmlContent = self::restoreSpecialCharsInAttributes($htmlContent);
             // Сохраняем HTML в файл
             file_put_contents($filePath, $htmlContent);
         }
