@@ -1,7 +1,19 @@
+
 <?php
 class HtmlSplitter
 {
     //region splitByTags
+    private static function extractBodyContent($html) {
+        // Регулярное выражение для извлечения содержимого между тегами <body>...</body>
+        $pattern = '/<body.*?>(.*?)<\/body>/is';
+
+        // Используем preg_match, чтобы найти содержимое между тегами <body>...</body>
+        if (preg_match($pattern, $html, $matches)) {
+            return $matches[1];
+        } else {
+            return "";
+        }
+    }
     /**
      * Разделяет HTML-контент на строки по тегам.
      *
@@ -57,7 +69,7 @@ class HtmlSplitter
         foreach ($styleNodes as $styleNode) {
             $styleNode->nodeValue = str_replace(['<', '>'], ['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], $styleNode->textContent);
         }
-        // Получаем отредактированный HTML-код
+
         $editedHtml = $dom->saveHTML();
 
         // Устанавливаем кодировку UTF-8 перед сохранением
@@ -74,7 +86,7 @@ class HtmlSplitter
 
         $html = mb_convert_encoding($html , 'HTML-ENTITIES', 'UTF-8');
         // Загружаем HTML-код в DOMDocument с использованием флагов LIBXML_HTML_NOIMPLIED и LIBXML_HTML_NODEFDTD
-        $dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $dom->loadHTML($html);
 
         libxml_use_internal_errors(false);
         // Создаем объект DOMXPath
@@ -109,11 +121,8 @@ class HtmlSplitter
         foreach ($styleNodes as $styleNode) {
             $styleNode->nodeValue = str_replace(['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], ['<', '>'],  $styleNode->textContent);
         }
-        // Получаем отредактированный HTML-код
-        $editedHtml = $dom->saveHTML();
-
         // Устанавливаем кодировку UTF-8 перед сохранением
-        $editedHtml =mb_convert_encoding($editedHtml , 'UTF-8', 'HTML-ENTITIES');
+        $editedHtml =self::extractBodyContent(mb_convert_encoding($dom->saveHTML() , 'UTF-8', 'HTML-ENTITIES'));
         return $editedHtml;
     }
     //endregion
@@ -348,5 +357,5 @@ $outputFolder = 'ContestSplited';
 $htmlContent = file_get_contents($inputFile);
 $goodPageLength = 500;
 $maxPageLength = $goodPageLength *1.2;
-HtmlSplitter::splitHtmlToFolder($htmlContent,$goodPageLength,$maxPageLength,$outputFolder);
 
+HtmlSplitter::splitHtmlToFolder($htmlContent,$goodPageLength,$maxPageLength,$outputFolder);
