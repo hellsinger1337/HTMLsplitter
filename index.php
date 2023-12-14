@@ -3,24 +3,13 @@
 class HtmlSplitter
 {
     //region splitByTags
-    private static function extractBodyContent($html) {
-        // Регулярное выражение для извлечения содержимого между тегами <body>...</body>
-        $pattern = '/<body.*?>(.*?)<\/body>/is';
-
-        // Используем preg_match, чтобы найти содержимое между тегами <body>...</body>
-        if (preg_match($pattern, $html, $matches)) {
-            return $matches[1];
-        } else {
-            return "";
-        }
-    }
     /**
      * Разделяет HTML-контент на строки по тегам.
      *
      * @param string $htmlString - HTML-контент.
      * @return array - Массив массивов, каждый из которых содержит информацию о теге и(если есть) тексте строки.
      */
-    public static function splitByTags(string $htmlString):array {
+    private static function splitByTags(string $htmlString):array {
         $htmlString = self::replaceSpecialCharsInAttributes($htmlString);
         // Используем регулярное выражение для разделения по HTML-тегам
         preg_match_all('/(<[^>]+>)([^<]*)|([^<]+)/', $htmlString, $matches, PREG_SET_ORDER);
@@ -28,7 +17,7 @@ class HtmlSplitter
         // Возвращаем результат
         return $matches;
     }
-    public static function replaceSpecialCharsInAttributes($html) {
+    private static function replaceSpecialCharsInAttributes($html) {
         // Создаем новый объект DOMDocument
         $dom = new DOMDocument('1.0', 'UTF-8');
 
@@ -37,7 +26,7 @@ class HtmlSplitter
         $html = mb_convert_encoding($html , 'HTML-ENTITIES', 'UTF-8');
         $html = preg_replace('/<([^a-zA-Z\/!])/', '@@@TEMP_LESS_THAN@@@', $html);
         // Загружаем HTML-код в DOMDocument с использованием флагов LIBXML_HTML_NOIMPLIED и LIBXML_HTML_NODEFDTD
-        $dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $dom->loadHTML($html,LIBXML_HTML_NOIMPLIED);
         libxml_use_internal_errors(false);
 
         // Создаем объект DOMXPath
@@ -70,12 +59,10 @@ class HtmlSplitter
             $styleNode->nodeValue = str_replace(['<', '>'], ['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], $styleNode->textContent);
         }
 
-        $editedHtml = $dom->saveHTML();
-
-        // Устанавливаем кодировку UTF-8 перед сохранением
-        $editedHtml = mb_convert_encoding($editedHtml, 'UTF-8', 'HTML-ENTITIES');
-
-        return $editedHtml;
+        // Получить элемент <body>
+        $bodyElement = $dom->getElementsByTagName('body')->item(0);
+        $bodyContent = $dom->saveHTML($bodyElement).PHP_EOL;
+        return mb_convert_encoding(preg_replace(['~<body[^>]*>~i', '~</body>~i'], '', $bodyContent), 'UTF-8', 'HTML-ENTITIES');
     }
 
     private static function restoreSpecialCharsInAttributes($html) {
@@ -85,8 +72,8 @@ class HtmlSplitter
         libxml_use_internal_errors(true);
 
         $html = mb_convert_encoding($html , 'HTML-ENTITIES', 'UTF-8');
-        // Загружаем HTML-код в DOMDocument с использованием флагов LIBXML_HTML_NOIMPLIED и LIBXML_HTML_NODEFDTD
-        $dom->loadHTML($html);
+        // Загружаем HTML-код в DOMDocument
+        $dom->loadHTML($html,LIBXML_HTML_NOIMPLIED);
 
         libxml_use_internal_errors(false);
         // Создаем объект DOMXPath
@@ -121,9 +108,12 @@ class HtmlSplitter
         foreach ($styleNodes as $styleNode) {
             $styleNode->nodeValue = str_replace(['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], ['<', '>'],  $styleNode->textContent);
         }
-        // Устанавливаем кодировку UTF-8 перед сохранением
-        $editedHtml =self::extractBodyContent(mb_convert_encoding($dom->saveHTML() , 'UTF-8', 'HTML-ENTITIES'));
-        return $editedHtml;
+        // Получить элемент <body>
+        $bodyElement = $dom->getElementsByTagName('body')->item(0);
+        $bodyContent = $dom->saveHTML($bodyElement).PHP_EOL;//
+        $ans = preg_replace(['~<body[^>]*>~i', '~</body>~i'], '', $bodyContent);
+        $ret = preg_replace('~<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN" "http://www.w3.org/TR/REC-html40/loose.dtd">\n~','', $bodyContent);
+        return mb_convert_encoding($ret, 'UTF-8', 'HTML-ENTITIES');
     }
     //endregion
 
@@ -193,8 +183,6 @@ class HtmlSplitter
         return $result;
     }
 
-
-
     /**
      * Обрезает HTML-контент внутри тегов и по заданной длине.
      *
@@ -212,21 +200,30 @@ class HtmlSplitter
         }
         $total_length = 0;// Общая длина контента
         $indexCounter=0;
+
+
         // Проход по строкам HTML-контента
         foreach ($lines as $index =>$this_elem) {
+            $thisTag = true;
+            $thisTagOpen = false;
+            $thisTagClos = false;
             // Проверка наличия открывающего или закрывающего тега в текущей строке
             if (!empty($lines[$index][1])) {
                 // Проверка, не является ли тег самозакрывающимся или пустым
                 if (!preg_match('/^<(\s*.+?\/\s*|\s*(img|br|input|hr|area|base|basefont|col|frame|isindex|link|meta|param)(\s.+?)?)>$/is', $lines[$index][1])) {
                     // Проверка наличия закрывающего тега
                     if (substr($lines[$index][1],1,1)==='/') {
-                        array_shift($open_tags);
+                        $thisTagClos = true;
                     } elseif (substr($lines[$index][1],1,1)!='!'){
                         // Открывающий тег
+                        $thisTagOpen = true;
                         array_unshift($open_tags, $lines[$index][1]);
                     }
+                }else{
+                    $thisTag=false;
                 }
             }
+            //var_dump($open_tags);
             $content_length = self::countWordsInHtml($lines[$index][2]);
             // Проверка, не превышена ли минимальная длина страницы
             if ($total_length + $content_length > $minPageLength) {
@@ -238,7 +235,8 @@ class HtmlSplitter
                         $truncate .= "</" . substr($tagWOattr,1,strlen($tagWOattr)-2) . ">";
                     }
                     $last_index = $indexCounter;
-                    array_shift($open_tags);
+                    if($thisTagOpen)
+                        array_shift($open_tags);
                     // Возвращение результата в зависимости от флага split
                     if (true === $split) {
                         return array(
@@ -249,11 +247,14 @@ class HtmlSplitter
                     return $truncate;
                 } else {
                     $truncate .= $lines[$index][1] . $lines[$index][2];
+                    if($thisTag && $thisTagClos)
+                        array_shift($open_tags);
                     foreach ($open_tags as $open_tag) {
                         $tagWOattr = preg_replace("#(</?\w+)(?:\s(?:[^<>/]|/[^<>])*)?(/?>)#ui", '$1$2',$open_tag);
                         $truncate .= "</" . substr($tagWOattr,1,strlen($tagWOattr)-2) . ">";
                     }
                     $last_index = $indexCounter+1;
+
                     // Возвращение результата в зависимости от флага split
                     if (true === $split) {
                         return array(
@@ -263,6 +264,8 @@ class HtmlSplitter
                     }
                 }
             }
+            if($thisTag && $thisTagClos)
+                array_shift($open_tags);
             $indexCounter++;
             $total_length+=$content_length;
             $truncate .= $lines[$index][1] . $lines[$index][2];
@@ -307,9 +310,9 @@ class HtmlSplitter
     public static function splitHtmlToArray(string $htmlContent, int $minPageLength, int $maxPageLength): array {
         $splitted = [];
 
-        if (strlen(preg_replace('/<.*?>/', '', $htmlContent)) <= $maxPageLength) {
-            return array($htmlContent);
-        }
+        /*    if (strlen(preg_replace('/<.*?>/', '', $htmlContent)) <= $maxPageLength) {*/
+        //    return array($htmlContent);
+        //}
 
         $lines = self::SplitByTags($htmlContent);
         $open_tags = [];
@@ -355,7 +358,7 @@ ini_set('memory_limit', '2560M');
 $inputFile = 'content.html';
 $outputFolder = 'ContestSplited';
 $htmlContent = file_get_contents($inputFile);
-$goodPageLength = 500;
-$maxPageLength = $goodPageLength *1.2;
+$minPageLength = 500;
+$maxPageLength = 600;
 
-HtmlSplitter::splitHtmlToFolder($htmlContent,$goodPageLength,$maxPageLength,$outputFolder);
+HtmlSplitter::splitHtmlToFolder($htmlContent,$minPageLength,$maxPageLength,$outputFolder);
