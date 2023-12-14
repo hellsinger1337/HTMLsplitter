@@ -47,6 +47,16 @@ class HtmlSplitter
         foreach ($textNodes as $textNode) {
             $textNode->nodeValue = str_replace(['<', '>','&lt;', '&gt;'], ['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@','@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'],  $textNode->textContent);
         }
+        // Обработка содержимого тегов <script> и <style>
+        $scriptNodes = $xpath->query('//script');
+        foreach ($scriptNodes as $scriptNode) {
+            $scriptNode->nodeValue = str_replace(['<', '>'], ['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], $scriptNode->textContent);
+        }
+
+        $styleNodes = $xpath->query('//style');
+        foreach ($styleNodes as $styleNode) {
+            $styleNode->nodeValue = str_replace(['<', '>'], ['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], $styleNode->textContent);
+        }
         // Получаем отредактированный HTML-код
         $editedHtml = $dom->saveHTML();
 
@@ -89,6 +99,16 @@ class HtmlSplitter
             $textNode->nodeValue = str_replace(['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], ['&lt;', '&gt;'], $textNode->nodeValue);
         }
 
+        // Обработка содержимого тегов <script> и <style>
+        $scriptNodes = $xpath->query('//script');
+        foreach ($scriptNodes as $scriptNode) {
+            $scriptNode->nodeValue = str_replace(['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], ['<', '>'], $scriptNode->textContent);
+        }
+
+        $styleNodes = $xpath->query('//style');
+        foreach ($styleNodes as $styleNode) {
+            $styleNode->nodeValue = str_replace(['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], ['<', '>'],  $styleNode->textContent);
+        }
         // Получаем отредактированный HTML-код
         $editedHtml = $dom->saveHTML();
 
@@ -201,7 +221,7 @@ class HtmlSplitter
             $content_length = self::countWordsInHtml($lines[$index][2]);
             // Проверка, не превышена ли минимальная длина страницы
             if ($total_length + $content_length > $minPageLength) {
-                if ($total_length + $content_length > $maxPageLength) {
+                if ($total_length + $content_length > $maxPageLength && substr($lines[$index][2],0,7)!='<script'&& substr($lines[$index][2],0,6)!='<style') {
                     $truncate .= $lines[$index][1] . self::getFirstWords($lines[$index][2], $maxPageLength - $total_length);
 
                     foreach ($open_tags as $open_tag) {
