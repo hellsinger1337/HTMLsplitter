@@ -1,7 +1,6 @@
 <?php
 class HtmlSplitter
 {
-
     //region splitByTags
     /**
      * Разделяет HTML-контент на строки по тегам.
@@ -24,9 +23,9 @@ class HtmlSplitter
         libxml_use_internal_errors(true);
 
         $html = mb_convert_encoding($html , 'HTML-ENTITIES', 'UTF-8');
+        $html = preg_replace('/<([^a-zA-Z\/!])/', '@@@TEMP_LESS_THAN@@@', $html);
         // Загружаем HTML-код в DOMDocument с использованием флагов LIBXML_HTML_NOIMPLIED и LIBXML_HTML_NODEFDTD
         $dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-
         libxml_use_internal_errors(false);
 
         // Создаем объект DOMXPath
@@ -37,6 +36,16 @@ class HtmlSplitter
         // Обходим все атрибуты и заменяем символы < и > в значениях
         foreach ($attributes as $attribute) {
             $attribute->value = str_replace(['<', '>'], ['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], $attribute->value);
+        }
+        $comments = $xpath->query('//comment()');
+        // Обходим все комментарии и заменяем символы < и > в их содержимом
+        foreach ($comments as $comment) {
+            $comment->nodeValue = str_replace(['<', '>'], ['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], $comment->nodeValue);
+        }
+        //Обходим все узлы с текстовым содержанием и заменяем символы < и > в тексте
+        $textNodes = $xpath->query('//text()');
+        foreach ($textNodes as $textNode) {
+            $textNode->nodeValue = str_replace(['<', '>','&lt;', '&gt;'], ['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@','@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'],  $textNode->textContent);
         }
         // Получаем отредактированный HTML-код
         $editedHtml = $dom->saveHTML();
@@ -68,6 +77,16 @@ class HtmlSplitter
         foreach ($attributes as $attribute) {
 
             $attribute->value = str_replace(['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], ['<', '>'], $attribute->value);
+        }
+        $comments = $xpath->query('//comment()');
+        // Обходим все комментарии и заменяем символы < и > в их содержимом
+        foreach ($comments as $comment) {
+            $comment->nodeValue = str_replace(['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], ['<', '>'], $comment->nodeValue);
+        }
+
+        $textNodes = $xpath->query('//text()');
+        foreach ($textNodes as $textNode) {
+            $textNode->nodeValue = str_replace(['@@@TEMP_LESS_THAN@@@', '@@@TEMP_MORE_THAN@@@'], ['&lt;', '&gt;'], $textNode->nodeValue);
         }
 
         // Получаем отредактированный HTML-код
