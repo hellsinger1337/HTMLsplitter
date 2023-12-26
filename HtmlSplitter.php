@@ -94,7 +94,7 @@ class HtmlSplitter
         return $result;
     }
     public function SplitToArray():void{
-        while($this->countWordsInHtml($this->dom->saveHTML())>0){
+        while($this->dom->documentElement->childNodes->length > 0){
 
             $targetDoc = new DOMDocument();
             $counter =0;
@@ -128,9 +128,8 @@ class HtmlSplitter
             $targetNode->appendChild($importedNode);
 
             // Увеличиваем счетчик скопированных узлов
-
-            // Рекурсивно копируем дочерние узлы
-            $this->getFirstPage($child,$targetDoc, $importedNode, $counter, $maxNodes,$minNodes);
+            if($child->nodeName != "script" && $child->nodeName != "style" &&$child->nodeName != "tr")
+                $this->getFirstPage($child,$targetDoc, $importedNode, $counter, $maxNodes,$minNodes);
 
             $child1 = $child->nextSibling;
             if(!$child->childNodes->length)
